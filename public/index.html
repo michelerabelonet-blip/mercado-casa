@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mercado da casa</title>
+  <meta name="theme-color" content="#1f7a4d">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icone.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icone.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="estilo.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- Login -->
+  <section id="tela-login" class="login" hidden>
+    <div class="login-caixa">
+      <div class="logo">🛒</div>
+      <h1>Mercado da casa</h1>
+      <form id="form-login">
+        <input id="senha" type="password" inputmode="text" autocomplete="current-password" placeholder="Senha da casa" required>
+        <button class="btn primario" type="submit">Entrar</button>
+        <p id="erro-login" class="erro"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- App -->
+  <div id="app" hidden>
+    <header class="topo">
+      <h1 id="titulo">Início</h1>
+      <button id="btn-sair" class="btn-link">Sair</button>
+    </header>
+
+    <main>
+      <!-- Início -->
+      <section id="aba-inicio" class="aba">
+        <div class="cards">
+          <div class="card destaque">
+            <span class="rotulo">Gasto em <span id="mes-atual"></span></span>
+            <strong id="gasto-mes">R$ 0,00</strong>
+            <span id="comp-mes" class="sub"></span>
+          </div>
+          <div class="card">
+            <span class="rotulo">Economia em descontos</span>
+            <strong id="economia-mes">R$ 0,00</strong>
+            <span class="sub">neste mês</span>
+          </div>
+          <div class="card">
+            <span class="rotulo">Sua inflação</span>
+            <strong id="inflacao">—</strong>
+            <span id="inflacao-sub" class="sub">precisa de 2 compras do mesmo produto</span>
+          </div>
+        </div>
+
+        <div class="bloco">
+          <h2>Gasto por mês</h2>
+          <div class="grafico"><canvas id="graf-meses"></canvas></div>
+        </div>
+
+        <div class="bloco">
+          <h2>Por categoria <small id="cat-mes"></small></h2>
+          <div id="categorias" class="barras"></div>
+        </div>
+
+        <div class="bloco" id="bloco-alertas" hidden>
+          <h2>Preços que mudaram</h2>
+          <ul id="alertas" class="lista"></ul>
+        </div>
+
+        <div class="bloco">
+          <h2>Compras</h2>
+          <ul id="compras" class="lista"></ul>
+        </div>
+      </section>
+
+      <!-- Nova nota -->
+      <section id="aba-nota" class="aba" hidden>
+        <div id="nota-envio">
+          <p class="dica">Fotografe o cupom inteiro, do cabeçalho até o QR Code. Se for comprido, tire várias fotos com um pedaço repetido entre uma e outra.</p>
+          <label class="btn primario grande" for="fotos">📷 Tirar ou escolher fotos</label>
+          <input id="fotos" type="file" accept="image/*" multiple hidden>
+          <div id="miniaturas" class="miniaturas"></div>
+          <button id="btn-ler" class="btn primario grande" hidden>Ler cupom</button>
+          <p id="lendo" class="lendo" hidden><span class="giro"></span> Lendo o cupom… pode levar até 1 minuto.</p>
+          <p id="erro-nota" class="erro"></p>
+        </div>
+
+        <div id="nota-revisao" hidden>
+          <div class="bloco">
+            <div class="linha-entre"><h2 id="rev-loja"></h2><button id="btn-descartar" class="btn-link">Descartar</button></div>
+            <label class="campo">Data <input id="rev-data" type="datetime-local"></label>
+            <div id="rev-conferencia" class="conferencia"></div>
+            <p id="rev-obs" class="aviso" hidden></p>
+            <p id="rev-dup" class="erro" hidden></p>
+          </div>
+          <div class="bloco">
+            <h2>Itens <small id="rev-qtd"></small></h2>
+            <div id="rev-itens" class="itens-rev"></div>
+            <button id="btn-add-item" class="btn">+ Adicionar item</button>
+          </div>
+          <button id="btn-salvar" class="btn primario grande">Salvar compra</button>
+        </div>
+      </section>
+
+      <!-- Produtos -->
+      <section id="aba-produtos" class="aba" hidden>
+        <input id="busca" type="search" placeholder="Buscar produto">
+        <div id="chips-cat" class="chips"></div>
+        <ul id="produtos" class="lista"></ul>
+      </section>
+
+      <!-- Lista -->
+      <section id="aba-lista" class="aba" hidden>
+        <p class="dica">Pelo ritmo das suas compras, estes produtos devem acabar nos próximos 10 dias.</p>
+        <ul id="lista-compras" class="lista"></ul>
+      </section>
+    </main>
+
+    <nav class="abas">
+      <button data-aba="inicio" class="ativa"><span>📊</span>Início</button>
+      <button data-aba="nota"><span>🧾</span>Nova nota</button>
+      <button data-aba="produtos"><span>🏷️</span>Produtos</button>
+      <button data-aba="lista"><span>📝</span>Lista</button>
+    </nav>
+  </div>
+
+  <!-- Detalhe -->
+  <dialog id="detalhe">
+    <div class="detalhe-topo"><h2 id="det-titulo"></h2><button class="btn-link" id="det-fechar">Fechar</button></div>
+    <div id="det-corpo"></div>
+  </dialog>
+
+  <div id="aviso" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

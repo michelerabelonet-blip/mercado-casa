@@ -1,0 +1,19 @@
+{
+  "name": "mercado-casa",
+  "version": "1.0.0",
+  "description": "Controle das compras de supermercado: leitura do cupom por foto, evolução de preços e consumo mensal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "pg": "^8.13.1"
+  }
+}
