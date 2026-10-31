@@ -78,13 +78,28 @@
 
       <!-- Nova nota -->
       <section id="aba-nota" class="aba" hidden>
-        <div id="nota-envio">
-          <p class="dica">Fotografe o cupom inteiro, do cabeçalho até o QR Code. Se for comprido, tire várias fotos com um pedaço repetido entre uma e outra.</p>
-          <label class="btn primario grande" for="fotos">📷 Tirar ou escolher fotos</label>
-          <input id="fotos" type="file" accept="image/*" multiple hidden>
-          <div id="miniaturas" class="miniaturas"></div>
-          <button id="btn-ler" class="btn primario grande" hidden>Ler cupom</button>
-          <p id="lendo" class="lendo" hidden><span class="giro"></span> Lendo o cupom… pode levar até 1 minuto.</p>
+        <div id="nota-envio" class="grade">
+          <div class="bloco pilha">
+            <h2>📷 Fotos do cupom</h2>
+            <p class="dica">Estique o cupom num lugar claro e fotografe de perto, do cabeçalho até o QR Code. Se for comprido, tire várias fotos com um pedaço repetido entre uma e outra.</p>
+            <label class="btn primario grande" for="fotos">Tirar ou escolher fotos</label>
+            <input id="fotos" type="file" accept="image/*" multiple hidden>
+            <div id="miniaturas" class="miniaturas"></div>
+            <button id="btn-ler" class="btn primario grande" hidden>Ler cupom</button>
+            <button id="btn-ler-ia" class="btn grande" hidden>Ler com IA</button>
+            <p id="lendo" class="lendo" hidden><span class="giro"></span> <span id="lendo-txt">Lendo o cupom…</span></p>
+          </div>
+
+          <div class="bloco pilha">
+            <h2>🔗 Nota da SEFAZ <small>pelo QR Code</small></h2>
+            <p class="dica">Fotografe só o QR Code do cupom. O app abre a nota no site da SEFAZ: lá, marque "Confirme que é humano", toque em Visualizar, copie a página inteira e cole aqui embaixo.</p>
+            <label class="btn grande" for="foto-qr">Ler QR Code</label>
+            <input id="foto-qr" type="file" accept="image/*" capture="environment" hidden>
+            <p id="qr-info" class="meta"></p>
+            <a id="link-sefaz" class="btn primario grande" target="_blank" rel="noopener" hidden>Abrir nota na SEFAZ</a>
+            <textarea id="texto-sefaz" rows="5" placeholder="Cole aqui o texto da página da nota"></textarea>
+            <button id="btn-ler-sefaz" class="btn primario grande">Ler texto colado</button>
+          </div>
           <p id="erro-nota" class="erro"></p>
         </div>
 

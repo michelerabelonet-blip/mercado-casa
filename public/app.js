@@ -7,6 +7,7 @@ const nomeMes = (m) => `${MESES[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 let CATEGORIAS = [];
+let IA = false;
 let painel = null;
 let catFiltro = 'Todas';
 const graficos = {};
@@ -272,6 +273,7 @@ function reduzir(arquivo, lado = 2200) {
 function desenharMiniaturas() {
   $('#miniaturas').innerHTML = fotos.map((f, i) => `<div><img src="${f.url}" alt="Foto ${i + 1}"><button data-tirar="${i}" aria-label="Remover">✕</button></div>`).join('');
   $('#btn-ler').hidden = !fotos.length;
+  $('#btn-ler-ia').hidden = !fotos.length || !IA;
 }
 
 $('#fotos').addEventListener('change', async (e) => {
@@ -289,11 +291,98 @@ $('#miniaturas').addEventListener('click', (e) => {
   if (b) { fotos.splice(Number(b.dataset.tirar), 1); desenharMiniaturas(); }
 });
 
+// bibliotecas pesadas só carregam quando usadas
+const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const JSQR = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+const scripts = {};
+function carregarScript(url) {
+  scripts[url] ??= new Promise((ok, erro) => {
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = ok;
+    s.onerror = () => { delete scripts[url]; erro(new Error('Sem internet para carregar o leitor.')); };
+    document.head.appendChild(s);
+  });
+  return scripts[url];
+}
+
+function imagemDe(blob) {
+  return new Promise((ok, erro) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = () => erro(new Error('Não consegui abrir a foto'));
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+// procura o QR Code da NFC-e na foto (inteira e na metade de baixo, onde ele costuma ficar)
+async function lerQr(blob) {
+  await carregarScript(JSQR);
+  const img = await imagemDe(blob);
+  const tentativas = [[0, 0, img.width, img.height], [0, img.height / 2, img.width, img.height / 2]];
+  for (const [x, y, w, h] of tentativas) {
+    for (const lado of [1400, 900]) {
+      const k = Math.min(1, lado / Math.max(w, h));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(w * k);
+      cv.height = Math.round(h * k);
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img, x, y, w, h, 0, 0, cv.width, cv.height);
+      const r = jsQR(ctx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height);
+      if (r?.data) return r.data;
+    }
+  }
+  return null;
+}
+
+const chaveDoQr = (url) => (String(url || '').match(/(?:p=|chNFe=)(\d{44})/i) || [])[1] || null;
+
+function lendo(texto) {
+  $('#lendo').hidden = !texto;
+  if (texto) $('#lendo-txt').textContent = texto;
+}
+
+// leitura grátis: o texto é reconhecido no próprio celular e o servidor monta os itens
 $('#btn-ler').addEventListener('click', async () => {
+  $('#btn-ler').hidden = true;
+  $('#btn-ler-ia').hidden = true;
+  $('#erro-nota').textContent = '';
+  try {
+    lendo('Preparando o leitor… (na primeira vez baixa uns 15 MB)');
+    await carregarScript(TESSERACT);
+    let atual = 0;
+    const worker = await Tesseract.createWorker('por', 1, {
+      logger: (m) => {
+        if (m.status === 'recognizing text') lendo(`Lendo foto ${atual + 1} de ${fotos.length}… ${Math.round(m.progress * 100)}%`);
+      },
+    });
+    const textos = [];
+    let chave = null;
+    for (atual = 0; atual < fotos.length; atual++) {
+      const { data } = await worker.recognize(fotos[atual].blob);
+      textos.push(data.text);
+      chave ||= chaveDoQr(await lerQr(fotos[atual].blob).catch(() => null));
+    }
+    await worker.terminate();
+    lendo('Montando os itens…');
+    const r = await api('/api/leitura-texto', { method: 'POST', body: JSON.stringify({ textos, chave }) });
+    rascunho = r.nota;
+    mostrarRevisao(r);
+  } catch (err) {
+    $('#erro-nota').textContent = err.message;
+    desenharMiniaturas();
+  } finally {
+    lendo(null);
+  }
+});
+
+// leitura por IA (só aparece se o servidor tiver a chave)
+$('#btn-ler-ia').addEventListener('click', async () => {
   const fd = new FormData();
   fotos.forEach((f, i) => fd.append('fotos', f.blob, `foto${i + 1}.jpg`));
   $('#btn-ler').hidden = true;
-  $('#lendo').hidden = false;
+  $('#btn-ler-ia').hidden = true;
+  lendo('Lendo o cupom com IA… pode levar até 1 minuto.');
   $('#erro-nota').textContent = '';
   try {
     const r = await api('/api/leitura', { method: 'POST', body: fd });
@@ -301,9 +390,41 @@ $('#btn-ler').addEventListener('click', async () => {
     mostrarRevisao(r);
   } catch (err) {
     $('#erro-nota').textContent = err.message;
-    $('#btn-ler').hidden = false;
+    desenharMiniaturas();
   } finally {
-    $('#lendo').hidden = true;
+    lendo(null);
+  }
+});
+
+// ---------- nota da SEFAZ pelo QR Code ----------
+let chaveSefaz = null;
+
+$('#foto-qr').addEventListener('change', async (e) => {
+  const arq = e.target.files[0];
+  e.target.value = '';
+  if (!arq) return;
+  $('#qr-info').textContent = 'Procurando o QR Code…';
+  try {
+    const url = await lerQr(arq);
+    if (!url || !/^https?:\/\//i.test(url)) throw new Error('Não achei o QR Code. Fotografe de perto, só o QR, sem reflexo.');
+    chaveSefaz = chaveDoQr(url);
+    // o "|" do link quebra em vários celulares; codificado, abre normal
+    $('#link-sefaz').href = url.replace(/\|/g, '%7C');
+    $('#link-sefaz').hidden = false;
+    $('#qr-info').textContent = chaveSefaz ? `Nota encontrada (chave …${chaveSefaz.slice(-8)}). Toque em "Abrir nota na SEFAZ".` : 'QR Code lido.';
+  } catch (err) {
+    $('#qr-info').textContent = err.message;
+  }
+});
+
+$('#btn-ler-sefaz').addEventListener('click', async () => {
+  $('#erro-nota').textContent = '';
+  try {
+    const r = await api('/api/leitura-sefaz', { method: 'POST', body: JSON.stringify({ texto: $('#texto-sefaz').value, chave: chaveSefaz }) });
+    rascunho = r.nota;
+    mostrarRevisao(r);
+  } catch (err) {
+    $('#erro-nota').textContent = err.message;
   }
 });
 
@@ -333,12 +454,14 @@ function atualizarConferencia() {
   el.textContent = Math.abs(dif) < 0.01
     ? `✓ Soma dos itens bate com o total do cupom: ${brl(total)}`
     : `Soma dos itens ${brl(soma)} × total do cupom ${brl(total)}: ${dif > 0 ? 'faltam' : 'sobram'} ${brl(Math.abs(dif))}. Confira os itens.`;
-  $('#rev-qtd').textContent = `${rascunho.itens.length} linhas${rascunho.qtd_total_itens ? ` · cupom diz ${rascunho.qtd_total_itens} itens` : ''}`;
+  const conferir = rascunho.itens.filter((i) => i.conferir).length;
+  $('#rev-qtd').textContent = `${rascunho.itens.length} linhas${rascunho.qtd_total_itens ? ` · cupom diz ${rascunho.qtd_total_itens} itens` : ''}${conferir ? ` · ${conferir} para conferir` : ''}`;
 }
 
 function desenharItensRevisao() {
   $('#rev-itens').innerHTML = rascunho.itens.map((it, i) => `
-    <div class="item-rev" data-i="${i}">
+    <div class="item-rev${it.conferir ? ' conferir' : ''}" data-i="${i}">
+      ${it.conferir ? '<span class="marca">⚠️ Conferir este item</span>' : ''}
       <input class="desc" data-campo="descricao" value="${esc(it.descricao)}">
       <div class="campos">
         <label>Qtd<input data-campo="quantidade" type="number" step="0.001" inputmode="decimal" value="${it.quantidade}"></label>
@@ -398,6 +521,7 @@ async function iniciar() {
   try {
     const eu = await api('/api/eu');
     CATEGORIAS = eu.categorias;
+    IA = eu.ia;
     $('#tela-login').hidden = true;
     $('#app').hidden = false;
     await carregar();

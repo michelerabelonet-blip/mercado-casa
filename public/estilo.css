@@ -193,3 +193,13 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
   position: fixed; left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 20;
   background: var(--texto); color: var(--fundo); padding: 12px 16px; border-radius: 12px; font-weight: 700; text-align: center;
 }
+
+.pilha { display: grid; gap: 10px; }
+.pilha h2 { margin: 0; }
+textarea {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--linha); border-radius: 10px;
+  background: var(--cartao); color: var(--texto); font: inherit; font-size: .9rem; resize: vertical;
+}
+.item-rev.conferir { border-color: var(--aviso); background: var(--aviso-claro); }
+.item-rev .marca { font-size: .75rem; font-weight: 800; color: var(--aviso); }
+.grade { display: grid; gap: 14px; }

@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const path = require('path');
 const { Pool } = require('pg');
 const analise = require('./lib/analise');
+const cupom = require('./lib/cupom');
 const { lerCupom, CATEGORIAS } = require('./lib/leitura');
 
 const PORTA = process.env.PORT || 3000;
@@ -83,7 +84,36 @@ app.get('/api/saude', (req, res) => res.json({ ok: true }));
 
 app.use('/api', (req, res, next) => (sessaoValida(req) ? next() : res.status(401).json({ erro: 'Entre com a senha.' })));
 
-app.get('/api/eu', (req, res) => res.json({ ok: true, categorias: CATEGORIAS }));
+app.get('/api/eu', (req, res) => res.json({ ok: true, categorias: CATEGORIAS, ia: !!process.env.ANTHROPIC_API_KEY }));
+
+// ---------- leitura gratuita: texto do OCR do celular ou texto copiado da SEFAZ ----------
+async function finalizarLeitura(nota) {
+  const prods = await db.query('select codigo, descricao, categoria from mercado.produtos');
+  cupom.corrigirComCadastro(nota, prods.rows);
+  let duplicada = null;
+  if (nota.chave) {
+    const r = await db.query('select id, data from mercado.compras where chave = $1', [nota.chave]);
+    duplicada = r.rows[0] || null;
+  }
+  return { nota, conferencia: analise.conferir(nota), duplicada };
+}
+
+app.post('/api/leitura-texto', async (req, res) => {
+  const textos = (req.body?.textos || []).filter((t) => typeof t === 'string' && t.trim());
+  if (!textos.length) return res.status(400).json({ erro: 'Não consegui ler texto nas fotos.' });
+  const nota = cupom.montarNota(textos);
+  if (req.body.chave) nota.chave = req.body.chave;
+  if (!nota.itens.length) return res.status(422).json({ erro: 'Não achei itens nas fotos. Tente fotos mais nítidas, com o cupom esticado e bem iluminado.' });
+  res.json(await finalizarLeitura(nota));
+});
+
+app.post('/api/leitura-sefaz', async (req, res) => {
+  const texto = String(req.body?.texto || '');
+  if (texto.trim().length < 30) return res.status(400).json({ erro: 'Cole o texto completo da página da nota.' });
+  const nota = cupom.lerSefaz(texto, req.body.chave || null);
+  if (!nota.itens.length) return res.status(422).json({ erro: 'Não achei itens no texto colado.' });
+  res.json(await finalizarLeitura(nota));
+});
 
 // ---------- leitura do cupom ----------
 const upload = multer({
@@ -92,7 +122,9 @@ const upload = multer({
   fileFilter: (req, f, cb) => cb(null, /^image\/(jpeg|png|webp)$/.test(f.mimetype)),
 });
 
+// leitura por IA (opcional, só com ANTHROPIC_API_KEY)
 app.post('/api/leitura', upload.array('fotos', 8), async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ erro: 'Leitura por IA desligada (sem chave).' });
   if (!req.files?.length) return res.status(400).json({ erro: 'Envie pelo menos uma foto do cupom.' });
   try {
     const { nota, uso } = await lerCupom(req.files);
