@@ -110,8 +110,14 @@ app.post('/api/leitura-texto', async (req, res) => {
 app.post('/api/leitura-sefaz', async (req, res) => {
   const texto = String(req.body?.texto || '');
   if (texto.trim().length < 30) return res.status(400).json({ erro: 'Cole o texto completo da página da nota.' });
-  const nota = cupom.lerSefaz(texto, req.body.chave || null);
-  if (!nota.itens.length) return res.status(422).json({ erro: 'Não achei itens no texto colado.' });
+  const chave = req.body.chave || cupom.chaveDoQr(req.body.url) || null;
+  const nota = cupom.lerSefaz(texto, chave);
+  // guarda o texto original (as últimas 50) para calibrar o leitor ao layout da SEFAZ
+  await db.query(
+    'insert into mercado.notas_brutas (origem, chave, texto, itens_lidos) values ($1,$2,$3,$4)',
+    [String(req.body.url || 'colado').slice(0, 300), nota.chave, texto.slice(0, 200000), nota.itens.length]);
+  await db.query('delete from mercado.notas_brutas where id not in (select id from mercado.notas_brutas order by id desc limit 50)');
+  if (!nota.itens.length) return res.status(422).json({ erro: 'Não achei itens na nota da SEFAZ. O texto ficou guardado para eu ajustar o leitor.' });
   res.json(await finalizarLeitura(nota));
 });
 

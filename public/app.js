@@ -417,16 +417,100 @@ $('#foto-qr').addEventListener('change', async (e) => {
   }
 });
 
-$('#btn-ler-sefaz').addEventListener('click', async () => {
+// Lê o texto da nota da SEFAZ; se a soma bater com o total e nada precisar de conferência, já salva
+async function processarSefaz(texto, url) {
+  irPara('nota');
   $('#erro-nota').textContent = '';
+  lendo('Lendo a nota da SEFAZ…');
   try {
-    const r = await api('/api/leitura-sefaz', { method: 'POST', body: JSON.stringify({ texto: $('#texto-sefaz').value, chave: chaveSefaz }) });
-    rascunho = r.nota;
-    mostrarRevisao(r);
+    const r = await api('/api/leitura-sefaz', {
+      method: 'POST', body: JSON.stringify({ texto, url: url || null, chave: chaveDoQr(url) || chaveSefaz }),
+    });
+    const n = r.nota;
+    const bate = Math.abs(r.conferencia.diferenca) < 0.01 && n.data && !n.itens.some((i) => i.conferir);
+    if (bate && !r.duplicada) {
+      await api('/api/compras', { method: 'POST', body: JSON.stringify({ nota: { ...n, data: n.data.length === 19 ? n.data + '-03:00' : n.data } }) });
+      aviso(`Nota salva: ${n.itens.length} itens, ${brl(n.total)}`);
+      $('#texto-sefaz').value = '';
+      await carregar();
+      irPara('inicio');
+    } else {
+      rascunho = n;
+      mostrarRevisao(r);
+      if (!r.duplicada) aviso('Confira a nota antes de salvar');
+    }
   } catch (err) {
     $('#erro-nota').textContent = err.message;
+  } finally {
+    lendo(null);
+  }
+}
+
+$('#btn-ler-sefaz').addEventListener('click', () => processarSefaz($('#texto-sefaz').value, null));
+
+$('#btn-colar-sefaz').addEventListener('click', async () => {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (!t.trim()) return aviso('Nada copiado ainda.');
+    $('#texto-sefaz').value = t;
+    processarSefaz(t, null);
+  } catch {
+    aviso('O navegador não deixou colar. Segure o dedo na caixa e escolha Colar.');
   }
 });
+
+// ---------- favorito "Enviar ao Mercado" ----------
+// Roda na página da SEFAZ: copia o texto (reserva), abre o app e entrega a nota quando o app avisar que está pronto
+function codigoFavorito() {
+  const A = location.origin;
+  const js = `(function(){var A='${A}';var t=document.body.innerText,u=location.href;`
+    + `try{navigator.clipboard.writeText(t).catch(function(){})}catch(e){}`
+    + `var w=window.open(A+'/#sefaz','mercado');if(!w){alert('Permita janelas pop-up para enviar a nota ao Mercado.');return}`
+    + `var ok=0;window.addEventListener('message',function(e){if(e.origin===A&&e.data==='mercado-pronto'&&!ok){ok=1;w.postMessage({tipo:'nota-sefaz',texto:t,url:u},A)}})})()`;
+  return 'javascript:' + encodeURIComponent(js);
+}
+$('#link-favorito').href = codigoFavorito();
+$('#link-favorito').addEventListener('click', (e) => { e.preventDefault(); aviso('Arraste este botão para a barra de favoritos.'); });
+$('#btn-copiar-favorito').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(codigoFavorito());
+    aviso('Código copiado. Cole no endereço do favorito.');
+  } catch {
+    prompt('Copie o código abaixo:', codigoFavorito());
+  }
+});
+
+// só aceita notas vindas de sites da Fazenda/SEFAZ do governo
+function origemSefaz(origem) {
+  try {
+    const h = new URL(origem).hostname;
+    return /\.gov\.br$/.test(h) && /fazenda|sefaz|sef\b/.test(h);
+  } catch { return false; }
+}
+window.addEventListener('message', (e) => {
+  if (e.data?.tipo !== 'nota-sefaz' || !origemSefaz(e.origin) || typeof e.data.texto !== 'string') return;
+  history.replaceState(null, '', location.pathname);
+  processarSefaz(e.data.texto, e.data.url);
+});
+
+// aberto pelo favorito: avisa a página da SEFAZ que já pode mandar a nota
+function anunciarPronto() {
+  if (location.hash !== '#sefaz') return;
+  irPara('nota');
+  if (window.opener) {
+    window.opener.postMessage('mercado-pronto', '*');
+    lendo('Recebendo a nota da SEFAZ…');
+    setTimeout(() => {
+      if (location.hash === '#sefaz') {
+        lendo(null);
+        history.replaceState(null, '', location.pathname);
+        $('#erro-nota').textContent = 'A nota não chegou sozinha. Ela foi copiada: toque em "📋 Colar copiado".';
+      }
+    }, 8000);
+  } else {
+    $('#erro-nota').textContent = 'A nota foi copiada: toque em "📋 Colar copiado".';
+  }
+}
 
 function paraInputData(iso) {
   if (!iso) return '';
@@ -524,6 +608,7 @@ async function iniciar() {
     IA = eu.ia;
     $('#tela-login').hidden = true;
     $('#app').hidden = false;
+    anunciarPronto();
     await carregar();
   } catch { /* api() já mostrou o login */ }
 }

@@ -97,8 +97,19 @@
             <input id="foto-qr" type="file" accept="image/*" capture="environment" hidden>
             <p id="qr-info" class="meta"></p>
             <a id="link-sefaz" class="btn primario grande" target="_blank" rel="noopener" hidden>Abrir nota na SEFAZ</a>
-            <textarea id="texto-sefaz" rows="5" placeholder="Cole aqui o texto da página da nota"></textarea>
-            <button id="btn-ler-sefaz" class="btn primario grande">Ler texto colado</button>
+            <details class="favorito">
+              <summary>⭐ Enviar sem copiar e colar (favorito "Enviar ao Mercado")</summary>
+              <p class="dica">Com a nota aberta na SEFAZ, toque nesse favorito: o app abre com a nota e salva sozinho quando a soma bater com o total.</p>
+              <p class="dica"><b>No computador:</b> arraste este botão para a barra de favoritos.</p>
+              <a id="link-favorito" class="btn grande" href="#">⭐ Enviar ao Mercado</a>
+              <p class="dica"><b>No celular (Chrome):</b> 1) toque em "Copiar código"; 2) adicione qualquer página aos favoritos; 3) edite esse favorito: nome <b>Enviar ao Mercado</b> e, no endereço, cole o código. Na página da nota, digite "Enviar ao Mercado" na barra de endereço e toque no favorito.</p>
+              <button id="btn-copiar-favorito" class="btn grande">Copiar código</button>
+            </details>
+            <textarea id="texto-sefaz" rows="4" placeholder="Ou cole aqui o texto da página da nota"></textarea>
+            <div class="linha-entre">
+              <button id="btn-colar-sefaz" class="btn">📋 Colar copiado</button>
+              <button id="btn-ler-sefaz" class="btn primario">Ler texto</button>
+            </div>
           </div>
           <p id="erro-nota" class="erro"></p>
         </div>
