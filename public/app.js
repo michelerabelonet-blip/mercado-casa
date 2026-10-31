@@ -430,7 +430,7 @@ async function processarSefaz(texto, url) {
     const bate = Math.abs(r.conferencia.diferenca) < 0.01 && n.data && !n.itens.some((i) => i.conferir);
     if (bate && !r.duplicada) {
       await api('/api/compras', { method: 'POST', body: JSON.stringify({ nota: { ...n, data: n.data.length === 19 ? n.data + '-03:00' : n.data } }) });
-      aviso(`Nota salva: ${n.itens.length} itens, ${brl(n.total)}`);
+      aviso(`Nota salva: ${n.itens.length} itens, ${brl(n.valor_pago || n.total)}${n.desconto_geral ? ` (desconto ${brl(n.desconto_geral)})` : ''}${n.data_estimada ? ' · data de hoje' : ''}`);
       $('#texto-sefaz').value = '';
       await carregar();
       irPara('inicio');

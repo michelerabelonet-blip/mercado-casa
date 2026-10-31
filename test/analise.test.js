@@ -13,8 +13,8 @@ const itens = [
   item(2, '2026-10-01T10:00:00Z', 'SASSAMI', 1, 17.98, 15.98, 2, 'Carnes e ovos'),
 ];
 const compras = [
-  { id: 1, data: '2026-09-01T10:00:00Z', total: 197.38 },
-  { id: 2, data: '2026-10-01T10:00:00Z', total: 213.38 },
+  { id: 1, data: '2026-09-01T10:00:00Z', total: 197.38, desconto_total: 0 },
+  { id: 2, data: '2026-10-01T10:00:00Z', total: 213.38, desconto_total: 2 },
 ];
 
 test('junta as linhas repetidas do cupom por compra', () => {

@@ -90,9 +90,24 @@ app.get('/api/eu', (req, res) => res.json({ ok: true, categorias: CATEGORIAS, ia
 async function finalizarLeitura(nota) {
   const prods = await db.query('select codigo, descricao, categoria from mercado.produtos');
   cupom.corrigirComCadastro(nota, prods.rows);
+  // a página/PDF da SEFAZ-MG não mostra a data: usa agora (horário de Brasília)
+  if (!nota.data) {
+    nota.data = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 19);
+    nota.data_estimada = true;
+  }
   let duplicada = null;
   if (nota.chave) {
     const r = await db.query('select id, data from mercado.compras where chave = $1', [nota.chave]);
+    duplicada = r.rows[0] || null;
+  }
+  if (!duplicada && !nota.chave) {
+    // sem chave: mesma loja e mesmo valor pago num intervalo de 7 dias é a mesma nota
+    const r = await db.query(
+      `select c.id, c.data from mercado.compras c left join mercado.lojas l on l.id = c.loja_id
+        where abs(c.total - $1) < 0.01 and (l.cnpj = $2 or $2 is null)
+          and (abs(extract(epoch from c.data - $3::timestamp)) < 7 * 86400 or c.criado_em > now() - interval '7 days')
+        limit 1`,
+      [Number(nota.valor_pago || nota.total) || 0, nota.loja?.cnpj || null, nota.data]);
     duplicada = r.rows[0] || null;
   }
   return { nota, conferencia: analise.conferir(nota), duplicada };
@@ -169,8 +184,9 @@ app.post('/api/compras', async (req, res) => {
         : await cli.query('insert into mercado.lojas (nome, cidade) values ($1,$2) returning id', [n.loja.nome, n.loja.cidade]);
       lojaId = r.rows[0].id;
     }
-    const desconto = n.itens.reduce((s, i) => s + (Number(i.desconto) || 0), 0);
-    const total = Number(n.total) || n.itens.reduce((s, i) => s + Number(i.valor_total), 0);
+    // desconto geral (SEFAZ-MG só mostra no total) soma com os descontos por item
+    const desconto = n.itens.reduce((s, i) => s + (Number(i.desconto) || 0), 0) + (Number(n.desconto_geral) || 0);
+    const total = Number(n.valor_pago) || Number(n.total) || n.itens.reduce((s, i) => s + Number(i.valor_total), 0);
     const c = await cli.query(
       `insert into mercado.compras (loja_id, data, chave, numero, total, desconto_total, forma_pagamento)
        values ($1,$2,$3,$4,$5,$6,$7) returning id`,
@@ -242,7 +258,7 @@ async function todosItens() {
 app.get('/api/painel', async (req, res) => {
   const [itens, compras] = await Promise.all([
     todosItens(),
-    db.query('select id, data, total from mercado.compras').then((r) => r.rows),
+    db.query('select id, data, total, desconto_total from mercado.compras').then((r) => r.rows),
   ]);
   res.json(analise.painel(itens, compras));
 });

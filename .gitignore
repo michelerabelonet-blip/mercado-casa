@@ -1,2 +1,4 @@
 node_modules
 .env
+# compras reais usadas nos testes: ficam só na máquina (repositório é público)
+test/fixtures/
