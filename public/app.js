@@ -459,6 +459,73 @@ $('#btn-colar-sefaz').addEventListener('click', async () => {
   }
 });
 
+// ---------- PDF da nota ----------
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// Remonta as linhas do PDF: junta os pedaços de texto que estão na mesma altura, da esquerda para a direita
+async function textoDoPdf(pdf) {
+  const linhas = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const pagina = await pdf.getPage(p);
+    const { items } = await pagina.getTextContent();
+    const porAltura = [];
+    for (const it of items) {
+      if (!it.str.trim()) continue;
+      const y = it.transform[5];
+      let linha = porAltura.find((l) => Math.abs(l.y - y) <= 2);
+      if (!linha) porAltura.push((linha = { y, partes: [] }));
+      linha.partes.push({ x: it.transform[4], s: it.str });
+    }
+    porAltura.sort((a, b) => b.y - a.y);
+    for (const l of porAltura) linhas.push(l.partes.sort((a, b) => a.x - b.x).map((x) => x.s).join(' ').replace(/\s+/g, ' ').trim());
+  }
+  return linhas.join('\n');
+}
+
+// PDF escaneado (só imagem): desenha cada página e usa a leitura por foto
+async function paginasComoFotos(pdf) {
+  const blobs = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const pagina = await pdf.getPage(p);
+    const vp = pagina.getViewport({ scale: 2 });
+    const cv = document.createElement('canvas');
+    cv.width = vp.width;
+    cv.height = vp.height;
+    await pagina.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    blobs.push(await new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.9)));
+  }
+  return blobs;
+}
+
+$('#arquivo-pdf').addEventListener('change', async (e) => {
+  const arq = e.target.files[0];
+  e.target.value = '';
+  if (!arq) return;
+  $('#erro-nota').textContent = '';
+  try {
+    lendo('Abrindo o PDF…');
+    await carregarScript(PDFJS);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    const pdf = await pdfjsLib.getDocument({ data: await arq.arrayBuffer() }).promise;
+    const texto = await textoDoPdf(pdf);
+    if (texto.replace(/\s/g, '').length >= 80) {
+      await processarSefaz(texto, 'pdf:' + arq.name);
+      return;
+    }
+    // sem texto dentro: vira fotos e segue pela leitura grátis por foto
+    const blobs = await paginasComoFotos(pdf);
+    fotos = blobs.map((blob) => ({ blob, url: URL.createObjectURL(blob) }));
+    desenharMiniaturas();
+    lendo(null);
+    aviso('Este PDF é uma imagem. Lendo como foto…');
+    $('#btn-ler').click();
+  } catch (err) {
+    $('#erro-nota').textContent = 'Não consegui abrir o PDF: ' + err.message;
+    lendo(null);
+  }
+});
+
 // ---------- favorito "Enviar ao Mercado" ----------
 // Roda na página da SEFAZ: copia o texto (reserva), abre o app e entrega a nota quando o app avisar que está pronto
 function codigoFavorito() {

@@ -28,6 +28,14 @@ test('lê item, item com valores na linha de baixo, peso e desconto', () => {
   );
 });
 
+test('entende quantidade escrita (texto de PDF) e deduz pelo total', () => {
+  const r = c.lerTexto([
+    '7896327516132 GELAT APTI 20G ABACAXI 6 UN 1,39 8,34',
+    '7896324400021 CAFE PO CAJUBA 500G ALMOF 29,90 179,40',
+  ].join('\n'));
+  assert.deepEqual(r.itens.map((i) => [i.quantidade, i.unidade, i.valor_total, i.conferir]), [[6, 'UN', 8.34, false], [6, 'UN', 179.4, false]]);
+});
+
 test('monta a nota das 3 fotos reais do Mart Minas', () => {
   const n = c.montarNota(['martminas-2-meio', 'martminas-3-fim', 'martminas-1-inicio'].map(fixture));
   assert.equal(n.loja.cnpj, '04737552001029');
